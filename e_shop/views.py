@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.db.models import Q
-from .models import Product
+from .models import Product, Cart
 from .serializers import ProductSerializer, CategorySerializer, Category
 
 
@@ -103,3 +103,58 @@ class ProductViewSet(viewsets.ViewSet):
             return Response({"detail": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
         product.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CartViewSet(viewsets.ViewSet):
+
+    @swagger_auto_schema(
+        responses={200: CartSerializer},
+        operation_description="Retrieve the current user's cart."
+    )
+    def list(self, request):
+        cart, _ = Cart.objects.get_or_create(user=request.user)
+        serializer = CartSerializer(cart)
+        return Response(serializer.data)
+
+    @swagger_auto_schema(
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'product_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the product to add'),
+                'quantity': openapi.Schema(type=openapi.TYPE_INTEGER, description='Quantity of the product'),
+            },
+            required=['product_id'],
+        ),
+        responses={200: CartSerializer, 404: "Product not found"},
+        operation_description="Add a product to the cart or update its quantity."
+    )
+    def add_product(self, request):
+        cart, _ = Cart.objects.get_or_create(user=request.user)
+        product_id = request.data.get("product_id")
+        quantity = request.data.get("quantity", 1)
+
+        product = Product.objects.filter(id=product_id).first()
+        if not product:
+            return Response({"detail": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
+        cart_item.quantity = quantity
+        cart_item.save()
+
+        serializer = CartSerializer(cart)
+        return Response(serializer.data)
+
+    @swagger_auto_schema(
+        responses={200: CartSerializer, 404: "Product not in cart"},
+        operation_description="Remove a product from the cart by product ID."
+    )
+    def remove_product(self, request, pk=None):
+        cart, _ = Cart.objects.get_or_create(user=request.user)
+        cart_item = CartItem.objects.filter(cart=cart, product_id=pk).first()
+
+        if not cart_item:
+            return Response({"detail": "Product not in cart."}, status=status.HTTP_404_NOT_FOUND)
+
+        cart_item.delete()
+        serializer = CartSerializer(cart)
+        return Response(serializer.data)
