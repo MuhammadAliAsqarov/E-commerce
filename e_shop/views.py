@@ -4,7 +4,32 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.db.models import Q
 from .models import Product
-from .serializers import ProductSerializer
+from .serializers import ProductSerializer, CategorySerializer, Category
+
+
+class CategoryViewSet(viewsets.ViewSet):
+
+    @swagger_auto_schema(
+        operation_description="Retrieve all categories",
+        responses={200: CategorySerializer(many=True)},
+    )
+    def list(self, request):
+        categories = Category.objects.all()
+        serializer = CategorySerializer(categories, many=True)
+        return Response({"message": "Successfully retrieved all categories", "data": serializer.data},
+                        status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+        operation_description="Create a new category",
+        request_body=CategorySerializer,
+        responses={201: CategorySerializer()},
+    )
+    def create(self, request):
+        serializer = CategorySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()  # Manually save the serializer in `ViewSet`
+        return Response({"message": "Category created successfully", "data": serializer.data},
+                        status=status.HTTP_201_CREATED)
 
 
 class ProductViewSet(viewsets.ViewSet):
@@ -52,7 +77,6 @@ class ProductViewSet(viewsets.ViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-
 
     @swagger_auto_schema(
         request_body=ProductSerializer,
