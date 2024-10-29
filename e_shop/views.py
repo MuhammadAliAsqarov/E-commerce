@@ -1,6 +1,5 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
-from rest_framework.decorators import action
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.db.models import Q
@@ -49,10 +48,11 @@ class ProductViewSet(viewsets.ViewSet):
     )
     def create(self, request):
         serializer = ProductSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
 
     @swagger_auto_schema(
         request_body=ProductSerializer,
@@ -63,21 +63,19 @@ class ProductViewSet(viewsets.ViewSet):
         product = Product.objects.filter(pk=pk).first()
         if not product:
             return Response({"detail": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
-
         serializer = ProductSerializer(product, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data)
 
     @swagger_auto_schema(
         responses={204: "No Content", 404: "Product not found"},
         operation_description="Delete a product by ID."
     )
-    def destroy(self, request, pk=None):
+    def destroy(self, request, pk):
         product = Product.objects.filter(pk=pk).first()
         if not product:
             return Response({"detail": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
-
         product.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
