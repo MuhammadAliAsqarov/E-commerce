@@ -3,15 +3,15 @@ from rest_framework.response import Response
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.db.models import Q
-from .models import Product, Cart
-from .serializers import ProductSerializer, CategorySerializer, Category
+from .models import Product, Cart, CartItem
+from .serializers import ProductSerializer, CategorySerializer, Category, CartSerializer
 
 
 class CategoryViewSet(viewsets.ViewSet):
 
     @swagger_auto_schema(
         operation_description="Retrieve all categories",
-        responses={200: CategorySerializer(many=True)},
+        responses={200: CategorySerializer(many=True)}
     )
     def list(self, request):
         categories = Category.objects.all()
@@ -27,7 +27,7 @@ class CategoryViewSet(viewsets.ViewSet):
     def create(self, request):
         serializer = CategorySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save()  # Manually save the serializer in `ViewSet`
+        serializer.save()
         return Response({"message": "Category created successfully", "data": serializer.data},
                         status=status.HTTP_201_CREATED)
 
@@ -83,7 +83,7 @@ class ProductViewSet(viewsets.ViewSet):
         responses={200: ProductSerializer, 404: "Product not found", 400: "Bad Request"},
         operation_description="Update an existing product by ID."
     )
-    def update(self, request, pk=None):
+    def update(self, request, pk):
         product = Product.objects.filter(pk=pk).first()
         if not product:
             return Response({"detail": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -129,7 +129,7 @@ class CartViewSet(viewsets.ViewSet):
         operation_description="Add a product to the cart or update its quantity."
     )
     def add_product(self, request):
-        cart, _ = Cart.objects.get_or_create(user=request.user)
+        cart= Cart.objects.get_or_create(user=request.user)
         product_id = request.data.get("product_id")
         quantity = request.data.get("quantity", 1)
 
@@ -148,8 +148,8 @@ class CartViewSet(viewsets.ViewSet):
         responses={200: CartSerializer, 404: "Product not in cart"},
         operation_description="Remove a product from the cart by product ID."
     )
-    def remove_product(self, request, pk=None):
-        cart, _ = Cart.objects.get_or_create(user=request.user)
+    def remove_product(self, request, pk):
+        cart = Cart.objects.get_or_create(user=request.user)
         cart_item = CartItem.objects.filter(cart=cart, product_id=pk).first()
 
         if not cart_item:
