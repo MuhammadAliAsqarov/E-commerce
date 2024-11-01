@@ -22,7 +22,7 @@ class CategoryViewSet(viewsets.ViewSet):
     @swagger_auto_schema(
         operation_description="Create a new category",
         request_body=CategorySerializer,
-        responses={201: CategorySerializer()},
+        responses={201: CategorySerializer()}
     )
     def create(self, request):
         serializer = CategorySerializer(data=request.data)
