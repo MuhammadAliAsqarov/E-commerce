@@ -1,4 +1,5 @@
 from django.core.cache import cache
+from django.db.models import Q
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from users.permissions import is_admin
@@ -53,29 +54,26 @@ class ProductViewSet(viewsets.ViewSet):
     )
     def list(self, request):
         queryset = Product.objects.all()
+        filters = {}
         category = request.query_params.get('category')
         min_price = request.query_params.get('min_price')
         max_price = request.query_params.get('max_price')
         search = request.query_params.get('search')
-
         if category:
-            queryset = queryset.filter(category__name=category)
+            filters['category__name'] = category
         if min_price:
-            queryset = queryset.filter(price__gte=min_price)
+            filters['price__gte'] = min_price
         if max_price:
-            queryset = queryset.filter(price__lte=max_price)
+            filters['price__lte'] = max_price
+        queryset = queryset.filter(**filters)
         if search:
-            queryset = queryset.filter(name__icontains=search)
-
+            queryset = queryset.filter(Q(name__icontains=search) | Q(description__icontains=search))
         paginator = CustomPagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request)
+        serializer = ProductSerializer(paginated_queryset, many=True) if paginated_queryset else ProductSerializer(
+            queryset, many=True)
 
-        if paginated_queryset:
-            serializer = ProductSerializer(paginated_queryset, many=True)
-            return paginator.get_paginated_response(serializer.data)
-        serializer = ProductSerializer(queryset, many=True)
-        return Response(serializer.data)
-
+        return paginator.get_paginated_response(serializer.data) if paginated_queryset else Response(serializer.data)
     @swagger_auto_schema(
         request_body=ProductCreateSerializer,
         responses={201: ProductCreateSerializer(many=True), 400: "Bad Request"},
@@ -99,22 +97,17 @@ class ProductViewSet(viewsets.ViewSet):
     )
     def destroy(self, request, category_id):
         serializer = ProductDestroySerializer(data=request.data)
-
-        if serializer.is_valid():
-            product_ids = serializer.validated_data['product_ids']
-
-            if not Category.objects.filter(id=category_id).exists():
-                raise CustomApiException(ErrorCodes.NOT_FOUND.value, message='Category Not Found')
-
-            products = Product.objects.filter(id__in=product_ids, category_id=category_id)
-
-            if not products.exists():
-                raise CustomApiException(ErrorCodes.NOT_FOUND.value,
-                                         message='No products found for the given IDs in this category.')
-            products.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        product_ids = serializer.validated_data['product_ids']
+        if not Category.objects.filter(id=category_id).exists():
+            raise CustomApiException(ErrorCodes.NOT_FOUND.value, message='Category Not Found')
+        products = Product.objects.filter(id__in=product_ids, category_id=category_id)
+        if not products.exists():
+            raise CustomApiException(ErrorCodes.NOT_FOUND.value,
+                                     message='No products found for the given IDs in this category.')
+        products.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class CartViewSet(viewsets.ViewSet):
@@ -126,25 +119,19 @@ class CartViewSet(viewsets.ViewSet):
     )
     def list(self, request):
         cache_key = f'cart_{request.user.id}'
-
         cached_data = cache.get(cache_key)
         if cached_data:
             return Response(cached_data)
-
         cart, created = Cart.objects.get_or_create(user=request.user)
         serializer = CartListSerializer(cart)
-
         total_items = sum(cart_item.quantity for cart_item in cart.cartitem_set.all())
         total_price = sum(cart_item.quantity * cart_item.product.price for cart_item in cart.cartitem_set.all())
-
         response_data = serializer.data
         response_data['total_items'] = total_items
         response_data['total_price'] = f"{total_price:.2f}"
-
         data_list = [response_data]
         paginator = CustomPagination()
         paginated_data = paginator.paginate_queryset(data_list, request)
-
         cache.set(cache_key, paginated_data, timeout=60 * 15)
         return paginator.get_paginated_response(paginated_data)
 
@@ -174,33 +161,24 @@ class CartViewSet(viewsets.ViewSet):
     def add_product(self, request):
         cart, created = Cart.objects.get_or_create(user=request.user)
         products_data = request.data.get("products", [])
-
         if not products_data:
             return Response({"detail": "No products provided."}, status=status.HTTP_400_BAD_REQUEST)
-
         for product_data in products_data:
             product_id = product_data.get("product_id")
             quantity = product_data.get("quantity", 1)
-
             product = Product.objects.filter(id=product_id).first()
             if not product:
                 return Response({"detail": f"Product with ID {product_id} not found."},
                                 status=status.HTTP_404_NOT_FOUND)
-
             cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
             if not created:
-
                 cart_item.quantity += quantity
             else:
-
                 cart_item.quantity = quantity
-
             cart_item.total_price = cart_item.quantity * product.price
             cart_item.save()
-
         cache_key = f'cart_{request.user.id}'
         cache.delete(cache_key)
-
         serializer = CartSerializer(cart)
         return Response(serializer.data)
 
@@ -221,12 +199,9 @@ class CartViewSet(viewsets.ViewSet):
         cart, created = Cart.objects.get_or_create(user=request.user)
         product_id = request.data.get("product_id")
         quantity = request.data.get("quantity", 1)
-
         cart_item = CartItem.objects.filter(cart=cart, product_id=product_id).first()
-
         if not cart_item:
             raise CustomApiException(ErrorCodes.NOT_FOUND.value, message="Product not in cart.")
-
         if quantity:
             cart_item.quantity -= quantity
             if cart_item.quantity <= 0:
@@ -235,10 +210,8 @@ class CartViewSet(viewsets.ViewSet):
                 cart_item.save()
         else:
             cart_item.delete()
-
         cache_key = f'cart_{request.user.id}'
         cache.delete(cache_key)
-
         serializer = CartSerializer(cart)
         return Response(serializer.data)
 
@@ -275,26 +248,20 @@ class PaymentViewSet(viewsets.ViewSet):
         amount = request.data.get("amount")
         payment_method = request.data.get("payment_method")
         card_details = request.data.get("card_details")
-
         if not amount or not payment_method or not card_details:
             return Response({"detail": "Amount, payment method, and card details are required."},
                             status=status.HTTP_400_BAD_REQUEST)
-
         cart = Cart.objects.filter(user=request.user).first()
         if not cart:
             return Response({"detail": "Cart not found."}, status=status.HTTP_404_NOT_FOUND)
-
         payment = Payment.objects.create(
             user=request.user,
             amount=amount,
             payment_method=payment_method,
             status='processed'
         )
-
         cart.cartitem_set.all().delete()
-
         cache_key = f'payment_{request.user.id}'
         cache.set(cache_key, payment.id, timeout=60 * 15)
-
         serializer = PaymentSerializer(payment)
         return Response(serializer.data, status=status.HTTP_200_OK)

@@ -51,7 +51,6 @@ class UserViewSet(viewsets.ViewSet):
                 data={"message": serializer.errors, 'ok': False},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
         validated_user = serializer.save()
         obj_create = OTP.objects.create(user_id=validated_user.id)
         obj_all = OTP.objects.filter(user_id=validated_user.id)
@@ -61,7 +60,6 @@ class UserViewSet(viewsets.ViewSet):
                 data={"error": "Too many attempts try after 12 hours", 'ok': False},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
         obj_create.save()
         send_otp(obj_create)
         return Response(data={"message": {'otp_key': obj_create.otp_key}, "ok": True}, status=status.HTTP_201_CREATED)
@@ -72,26 +70,20 @@ class UserViewSet(viewsets.ViewSet):
     def verify(self, request):
         otp_code = request.data.get('otp_code')
         otp_key = request.data.get('otp_key')
-
         if not otp_code or not otp_key:
             return Response(
                 data={'error': 'OTP code or key not found', 'ok': False},
                 status=status.HTTP_400_BAD_REQUEST)
-
         obj_otp = OTP.objects.filter(otp_key=otp_key).first()
-
         if obj_otp is None:
             return Response(
                 data={'error': 'OTP not found', 'ok': False},
                 status=status.HTTP_400_BAD_REQUEST)
-
         otp_expire(obj_otp.created_at)
-
         if obj_otp.attempts >= 1:
             return Response(
                 data={"error": "Please get new OTP code and key!", 'ok': False},
                 status=status.HTTP_400_BAD_REQUEST)
-
         if obj_otp.otp_code != otp_code:
             obj_otp.attempts += 1
             obj_otp.save(update_fields=['attempts'])
@@ -99,7 +91,6 @@ class UserViewSet(viewsets.ViewSet):
                 data={'error': 'OTP code is incorrect!', 'ok': False},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
         user = obj_otp.user
         user.is_verified = True
         user.save(update_fields=['is_verified'])
