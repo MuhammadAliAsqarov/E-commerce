@@ -1,21 +1,16 @@
-from datetime import timedelta, datetime
-from enum import verify
-
+from datetime import datetime
 from django.contrib.auth import update_session_auth_hash
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import status, viewsets
-from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.hashers import check_password, make_password
-from user.models import User, OTP
+from users.models import User, OTP
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from user.serializers import UserSerializer
-from .serializers import (
-     LoginSerializer, OTPSerializer, ChangePasswordSerializer, ResetUserPasswordSerializer,
-    OTPUserPasswordSerializer, NewPasswordSerializer, OTPResendSerializer
-)
+from .serializers import (UserSerializer, OTPSerializer, ChangePasswordSerializer, ResetUserPasswordSerializer,
+                          OTPUserPasswordSerializer, NewPasswordSerializer, OTPResendSerializer
+                          )
 from .utils import send_otp, otp_expire, check_otp, check_user
 from exceptions.exception import CustomApiException
 from exceptions.error_codes import ErrorCodes
@@ -112,30 +107,30 @@ class UserViewSet(viewsets.ViewSet):
         return Response(data={'message': 'OTP verification successful!', 'ok': True}, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(
-            request_body=openapi.Schema(
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'username': openapi.Schema(type=openapi.TYPE_STRING, description='Username'),
+                'password': openapi.Schema(type=openapi.TYPE_STRING, description='Password'),
+            }
+        ),
+        responses={
+            200: openapi.Response('Login successful', openapi.Schema(
                 type=openapi.TYPE_OBJECT,
                 properties={
-                    'username': openapi.Schema(type=openapi.TYPE_STRING, description='Username'),
-                    'password': openapi.Schema(type=openapi.TYPE_STRING, description='Password'),
+                    'access_token': openapi.Schema(type=openapi.TYPE_STRING),
+                    'refresh_token': openapi.Schema(type=openapi.TYPE_STRING),
                 }
-            ),
-            responses={
-                200: openapi.Response('Login successful', openapi.Schema(
-                    type=openapi.TYPE_OBJECT,
-                    properties={
-                        'access_token': openapi.Schema(type=openapi.TYPE_STRING),
-                        'refresh_token': openapi.Schema(type=openapi.TYPE_STRING),
-                    }
-                )),
-                400: 'Incorrect password',
-                404: 'User not found'
-            },
-            operation_summary="User login",
-            operation_description="This endpoint allows a user to log in."
-        )
+            )),
+            400: 'Incorrect password',
+            404: 'User not found'
+        },
+        operation_summary="User login",
+        operation_description="This endpoint allows a user to log in."
+    )
     def login(self, request):
         data = request.data
-        user = User.objects.filter(username=data['username'], is_verified =True).first()
+        user = User.objects.filter(username=data['username'], is_verified=True).first()
         if not user:
             raise CustomApiException(error_code=ErrorCodes.USER_DOES_NOT_EXIST.value)
         if not check_password(data['password'], user.password):
@@ -143,6 +138,7 @@ class UserViewSet(viewsets.ViewSet):
         refresh = RefreshToken.for_user(user)
         access_token = str(refresh.access_token)
         return Response({'access_token': access_token, 'refresh_token': str(refresh)}, status=status.HTTP_200_OK)
+
 
 class ChangePasswordViewSet(viewsets.ViewSet):
     permission_classes = (IsAuthenticated,)

@@ -1,13 +1,13 @@
 from django.core.cache import cache
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
-from user.permissions import is_admin
-from . import serializers
-from .models import Product, Cart,CartItem,Payment
-from .serializers import  Category, CartSerializer, ProductDestroySerializer
+from users.permissions import is_admin
+from .models import Product, Cart, CartItem, Payment
+from .serializers import Category, CartSerializer, ProductDestroySerializer
 from rest_framework import viewsets, status
 from rest_framework.response import Response
-from .serializers import ProductSerializer, ProductCreateSerializer,CartListSerializer,PaymentSerializer,CategorySerializer
+from .serializers import ProductSerializer, ProductCreateSerializer, CartListSerializer, PaymentSerializer, \
+    CategorySerializer
 from .custom_pagination import CustomPagination
 from exceptions.error_codes import ErrorCodes
 from exceptions.exception import CustomApiException
@@ -58,7 +58,6 @@ class ProductViewSet(viewsets.ViewSet):
         max_price = request.query_params.get('max_price')
         search = request.query_params.get('search')
 
-
         if category:
             queryset = queryset.filter(category__name=category)
         if min_price:
@@ -74,10 +73,8 @@ class ProductViewSet(viewsets.ViewSet):
         if paginated_queryset:
             serializer = ProductSerializer(paginated_queryset, many=True)
             return paginator.get_paginated_response(serializer.data)
-        else:
-            serializer = ProductSerializer(queryset, many=True)
-            return Response(serializer.data)
-
+        serializer = ProductSerializer(queryset, many=True)
+        return Response(serializer.data)
 
     @swagger_auto_schema(
         request_body=ProductCreateSerializer,
@@ -87,7 +84,6 @@ class ProductViewSet(viewsets.ViewSet):
     @is_admin
     def create(self, request):
         serializer = ProductCreateSerializer(data=request.data)
-
         if serializer.is_valid():
             products = serializer.save()
             return Response(
@@ -95,8 +91,6 @@ class ProductViewSet(viewsets.ViewSet):
                 status=status.HTTP_201_CREATED
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
 
     @swagger_auto_schema(
         request_body=ProductDestroySerializer,
@@ -109,23 +103,21 @@ class ProductViewSet(viewsets.ViewSet):
         if serializer.is_valid():
             product_ids = serializer.validated_data['product_ids']
 
-
             if not Category.objects.filter(id=category_id).exists():
-                raise CustomApiException(ErrorCodes.NOT_FOUND.value,message= 'Category Not Found')
+                raise CustomApiException(ErrorCodes.NOT_FOUND.value, message='Category Not Found')
 
             products = Product.objects.filter(id__in=product_ids, category_id=category_id)
 
             if not products.exists():
-
-
-                raise CustomApiException(ErrorCodes.NOT_FOUND.value, message='No products found for the given IDs in this category.')
+                raise CustomApiException(ErrorCodes.NOT_FOUND.value,
+                                         message='No products found for the given IDs in this category.')
             products.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class CartViewSet(viewsets.ViewSet):
 
+class CartViewSet(viewsets.ViewSet):
     pagination_class = CustomPagination
 
     @swagger_auto_schema(
@@ -135,14 +127,12 @@ class CartViewSet(viewsets.ViewSet):
     def list(self, request):
         cache_key = f'cart_{request.user.id}'
 
-
         cached_data = cache.get(cache_key)
         if cached_data:
             return Response(cached_data)
 
         cart, created = Cart.objects.get_or_create(user=request.user)
         serializer = CartListSerializer(cart)
-
 
         total_items = sum(cart_item.quantity for cart_item in cart.cartitem_set.all())
         total_price = sum(cart_item.quantity * cart_item.product.price for cart_item in cart.cartitem_set.all())
@@ -155,10 +145,8 @@ class CartViewSet(viewsets.ViewSet):
         paginator = CustomPagination()
         paginated_data = paginator.paginate_queryset(data_list, request)
 
-
         cache.set(cache_key, paginated_data, timeout=60 * 15)
         return paginator.get_paginated_response(paginated_data)
-
 
     @swagger_auto_schema(
         request_body=openapi.Schema(
@@ -194,12 +182,10 @@ class CartViewSet(viewsets.ViewSet):
             product_id = product_data.get("product_id")
             quantity = product_data.get("quantity", 1)
 
-
             product = Product.objects.filter(id=product_id).first()
             if not product:
                 return Response({"detail": f"Product with ID {product_id} not found."},
                                 status=status.HTTP_404_NOT_FOUND)
-
 
             cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
             if not created:
@@ -209,19 +195,14 @@ class CartViewSet(viewsets.ViewSet):
 
                 cart_item.quantity = quantity
 
-
             cart_item.total_price = cart_item.quantity * product.price
             cart_item.save()
-
 
         cache_key = f'cart_{request.user.id}'
         cache.delete(cache_key)
 
         serializer = CartSerializer(cart)
         return Response(serializer.data)
-
-
-
 
     @swagger_auto_schema(
         request_body=openapi.Schema(
@@ -241,11 +222,10 @@ class CartViewSet(viewsets.ViewSet):
         product_id = request.data.get("product_id")
         quantity = request.data.get("quantity", 1)
 
-
         cart_item = CartItem.objects.filter(cart=cart, product_id=product_id).first()
 
         if not cart_item:
-            raise CustomApiException(ErrorCodes.NOT_FOUND.value,message="Product not in cart.")
+            raise CustomApiException(ErrorCodes.NOT_FOUND.value, message="Product not in cart.")
 
         if quantity:
             cart_item.quantity -= quantity
@@ -261,18 +241,22 @@ class CartViewSet(viewsets.ViewSet):
 
         serializer = CartSerializer(cart)
         return Response(serializer.data)
+
+
 class PaymentViewSet(viewsets.ViewSet):
     @swagger_auto_schema(
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             properties={
                 'amount': openapi.Schema(type=openapi.TYPE_NUMBER, description='Total amount to be charged'),
-                'payment_method': openapi.Schema(type=openapi.TYPE_STRING, description='Payment method (e.g., credit card, PayPal)'),
+                'payment_method': openapi.Schema(type=openapi.TYPE_STRING,
+                                                 description='Payment method (e.g., credit card, PayPal)'),
                 'card_details': openapi.Schema(
                     type=openapi.TYPE_OBJECT,
                     properties={
                         'card_number': openapi.Schema(type=openapi.TYPE_STRING, description='Card number'),
-                        'expiry_date': openapi.Schema(type=openapi.TYPE_STRING, description='Expiry date in MM/YYYY format'),
+                        'expiry_date': openapi.Schema(type=openapi.TYPE_STRING,
+                                                      description='Expiry date in MM/YYYY format'),
                         'cvv': openapi.Schema(type=openapi.TYPE_STRING, description='CVV code'),
                     },
                     required=['card_number', 'expiry_date', 'cvv'],
@@ -292,14 +276,13 @@ class PaymentViewSet(viewsets.ViewSet):
         payment_method = request.data.get("payment_method")
         card_details = request.data.get("card_details")
 
-
         if not amount or not payment_method or not card_details:
-            return Response({"detail": "Amount, payment method, and card details are required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Amount, payment method, and card details are required."},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         cart = Cart.objects.filter(user=request.user).first()
         if not cart:
             return Response({"detail": "Cart not found."}, status=status.HTTP_404_NOT_FOUND)
-
 
         payment = Payment.objects.create(
             user=request.user,
@@ -308,12 +291,10 @@ class PaymentViewSet(viewsets.ViewSet):
             status='processed'
         )
 
-
         cart.cartitem_set.all().delete()
 
         cache_key = f'payment_{request.user.id}'
         cache.set(cache_key, payment.id, timeout=60 * 15)
-
 
         serializer = PaymentSerializer(payment)
         return Response(serializer.data, status=status.HTTP_200_OK)
