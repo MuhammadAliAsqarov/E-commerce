@@ -81,7 +81,7 @@ class ProductViewSet(viewsets.ViewSet):
     @swagger_auto_schema(
         request_body=ProductSerializer,
         responses={200: ProductSerializer, 404: "Product not found", 400: "Bad Request"},
-        operation_description="Update an existing product by ID."
+        operation_description="Update an existing product by ID"
     )
     def update(self, request, pk):
         product = Product.objects.filter(pk=pk).first()
