@@ -22,6 +22,11 @@ def paginate_and_cache_cart_response(request, response_data, cache_key, timeout=
     return paginator.get_paginated_response(paginated_data)
 
 
+def fetch_or_create_cart(user):
+    cart, _ = Cart.objects.get_or_create(user=user)
+    return cart
+
+
 def validate_products_data(products_data):
     if not products_data:
         return {"detail": "No products provided."}

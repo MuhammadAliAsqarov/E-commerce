@@ -12,7 +12,7 @@ from .serializers import ProductSerializer, ProductCreateSerializer, CartListSer
 from .custom_pagination import CustomPagination
 from exceptions.error_codes import ErrorCodes
 from exceptions.exception import CustomApiException
-from .utils import get_cached_cart_data, calculate_cart_totals, paginate_and_cache_cart_response, fetch_or_create_cart, \
+from .utils import get_cached_cart_data, calculate_cart_totals, paginate_and_cache_cart_response, fetch_or_create_cart,\
     validate_products_data, add_products_to_cart, clear_cart_cache, get_cart, get_cart_item, update_or_remove_cart_item
 
 
@@ -153,9 +153,7 @@ class CartViewSet(viewsets.ViewSet):
         operation_description="Add multiple products to the cart."
     )
     def add_product(self, request):
-        cart = get_cart(request.user)
-        if not cart:
-            raise CustomApiException(ErrorCodes.NOT_FOUND.value, message="You don't have a cart.")
+        cart = fetch_or_create_cart(request.user)
         products_data = request.data.get("products", [])
         validation_error = validate_products_data(products_data)
         if validation_error:
