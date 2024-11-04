@@ -74,7 +74,6 @@ class ProductViewSet(viewsets.ViewSet):
         paginated_queryset = paginator.paginate_queryset(queryset, request)
         serializer = ProductSerializer(paginated_queryset, many=True) if paginated_queryset else ProductSerializer(
             queryset, many=True)
-
         return paginator.get_paginated_response(serializer.data) if paginated_queryset else Response(serializer.data)
 
     @swagger_auto_schema(
