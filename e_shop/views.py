@@ -217,7 +217,7 @@ class PaymentViewSet(viewsets.ViewSet):
             400: openapi.Response("Invalid payment data"),
             404: openapi.Response("Cart not found"),
         },
-        operation_description="Process payment for the user's cart.",
+        operation_description="Process payment for the user's cart."
     )
     def create(self, request):
         amount = request.data.get("amount")
